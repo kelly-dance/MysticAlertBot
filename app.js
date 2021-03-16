@@ -100,6 +100,7 @@ const filterFromQueryStr = query => {
       const target = Number(str.substring(end.index, str.length - lastChar.length));
       const compare = direction(target);
       if(key === 'tokens') return item => maybeNot(compare(item.tokens));
+      if(key === 'enchants') return item => maybeNot(compare(item.enchants.length));
       if(key === 'lives') return item => maybeNot(compare(item.lives));
       if(key === 'tier') return item => maybeNot(compare(item.tier));
       if(key === 'maxlives') return item => maybeNot(compare(item.maxLives));
@@ -129,7 +130,7 @@ const settings = (()=>{
   const raw = fs.existsSync('./settings.json') ? JSON.parse(fs.readFileSync('./settings.json')) : {
     enabled: false,
     filters: ['tokens0+'],
-    alert: "use `ma setalert [alert]` to change this text",
+    alert: `use \`${process.env.BOT_PREFIX} setalert [alert]\` to change this text`,
   };
   raw.filters = raw.filters.map(quickFilter);
   if(raw.webhook) setHook(...raw.webhook.login);
@@ -141,7 +142,7 @@ const connectSocket = () => {
 
   socket.on('open', () => console.log('Connected to WebSocket!'));
 
-  socket.on('message', data => {
+  socket.on('message', async data => {
     if(data === '3') return;
     if(!settings.enabled) return;
     const event = JSON.parse(data);
@@ -150,11 +151,29 @@ const connectSocket = () => {
     if(tags.length === 1 && tags[0] === 'owner') return;
     const passes = settings.filters.filter(filter => filter.predicate(item));
     if(!passes.length) return;
+
+    let linkText = item.owner;
+
+    await (async () => {
+      try{
+        const request = await fetch(`https://pitpanda.rocks/api/players/${item.owner}`);
+        if(!request.ok) return;
+        const data = await request.json();
+        if(!data.success) return;
+        linkText = `${data.data.formattedLevel.replace(/§./g, '')} ${data.data.name}`;
+      }catch(e){};
+    })();
+
     getHook().send(
       settings.alert,
       new Discord.MessageEmbed()
         .setTitle('New Mystic!')
-        .setDescription(`Owner: https://pitpanda.rocks/players/${item.owner}\nPassed: ${passes.map(f=>`\`${f.name}\``).join(', ')}\n\`\`\`json\n${data}\`\`\``)
+        .setDescription([
+          `Owner: [${linkText}](https://pitpanda.rocks/players/${item.owner})`,
+          `Events: ${tags.map(tag=>`\`${tag}\``).join(', ')}`,
+          `Passed filters: ${passes.map(f=>`\`${f.name}\``).join(', ')}`,
+          `\`\`\`json\n${data}\`\`\``,
+        ].join('\n'))
         .setImage(`https://pitpanda.rocks/api/images/item/${item._id}`)
         .setTimestamp()
     );
@@ -222,7 +241,7 @@ const commands = {
     await msg.reply('Removed!');
   },
   setalert: async (msg, args) => {
-    settings.alert = msg.content.substring(`ma setalert `.length);
+    settings.alert = msg.content.substring(`${process.env.BOT_PREFIX} setalert `.length);
     saveSettings();
     await msg.reply('Set!');
   },
@@ -239,7 +258,7 @@ const commands = {
 
 client.on('message', async msg => {
   const args = msg.content.toLowerCase().split(/\s+/);
-  if(args.shift() !== 'ma') return;
+  if(args.shift() !== process.env.BOT_PREFIX) return;
   if(args[0] in commands) await commands[args.shift()](msg, args);
 });
 
