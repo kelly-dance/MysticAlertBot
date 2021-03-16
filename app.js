@@ -147,7 +147,7 @@ const connectSocket = () => {
     const event = JSON.parse(data);
     const { tags, item } = event;
     console.log(event)
-    if(!tags.includes('new')) return;
+    if(tags.length === 1 && tags[0] === 'owner') return;
     const passes = settings.filters.filter(filter => filter.predicate(item));
     if(!passes.length) return;
     getHook().send(
