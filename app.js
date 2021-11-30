@@ -172,7 +172,6 @@ const connectSocket = () => {
           `Owner: [${linkText}](https://pitpanda.rocks/players/${item.owner})`,
           `Events: ${tags.map(tag=>`\`${tag}\``).join(', ')}`,
           `Passed filters: ${passes.map(f=>`\`${f.name}\``).join(', ')}`,
-          `\`\`\`json\n${data}\`\`\``,
         ].join('\n'))
         .setImage(`https://pitpanda.rocks/api/images/item/${item._id}`)
         .setTimestamp()
