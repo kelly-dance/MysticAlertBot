@@ -169,7 +169,7 @@ const connectSocket = () => {
     })();
 
     getHook().send(
-      settings.alert + "\n" + passes.filter(el => el.alert).map(el => el.alert),
+      settings.alert + passes.filter(el => el.alert).map(el => `\n${el.alert}`).join(''),
       new Discord.MessageEmbed()
         .setTitle('New Mystic!')
         .setDescription([
