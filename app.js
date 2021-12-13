@@ -41,6 +41,7 @@ const classes = {};
  * @typedef {Object} Filter
  * @property {string} name
  * @property {FilterPredicate} predicate
+ * @property {string | null} alert
  */
 /**
  * @typedef {(item: Item =>) boolean} FilterPredicate 
@@ -121,7 +122,7 @@ const filterFromQueryStr = query => {
   return item => pieces.every(f => f(item));
 }
 
-const quickFilter = (str) => ({name:str,predicate:filterFromQueryStr(str)});
+const quickFilter = (el) => ({name:el.name,predicate:filterFromQueryStr(el.name),alert:el.alert});
 
 /**
  * @type {{enabled:boolean, filters:Filter[],webhook:{login:[string,string],location:string},alert:string}}
@@ -129,9 +130,12 @@ const quickFilter = (str) => ({name:str,predicate:filterFromQueryStr(str)});
 const settings = (()=>{
   const raw = fs.existsSync('./settings.json') ? JSON.parse(fs.readFileSync('./settings.json')) : {
     enabled: false,
-    filters: ['tokens0+'],
+    filters: [{name: 'tokens0+', alert: null}],
     alert: `use \`${process.env.BOT_PREFIX} setalert [alert]\` to change this text`,
   };
+  if (raw.filters.length !== 1 && typeof raw.filters[0] === "string") { // migrate data
+    raw.filters = raw.filters.map(el => ({name: el, alert: null}));
+  }
   raw.filters = raw.filters.map(quickFilter);
   if(raw.webhook) setHook(...raw.webhook.login);
   return raw;
@@ -165,7 +169,7 @@ const connectSocket = () => {
     })();
 
     getHook().send(
-      settings.alert,
+      settings.alert + "\n" + passes.filter(el => el.alert).map(el => el.alert),
       new Discord.MessageEmbed()
         .setTitle('New Mystic!')
         .setDescription([
@@ -188,7 +192,11 @@ const connectSocket = () => {
 
 connectSocket();
 
-const saveSettings = () => fs.writeFileSync('./settings.json', JSON.stringify({...settings, filters: settings.filters.map(f=>f.name)}))
+const saveSettings = () => fs.writeFileSync('./settings.json', JSON.stringify({...settings, filters: settings.filters.map(f=>{
+  let el = {...f}
+  delete el.predicate
+  return el
+})}))
 saveSettings()
 /**
  * @type {Record<string,(msg:Discord.Message,args:string[])=>void>}
@@ -229,9 +237,18 @@ const commands = {
   add: async (msg, args) => {
     if(!args[0]) return await msg.reply('What filter tho');
     if(settings.filters.some(q => q.name === args[0])) return await msg.reply('Already added this filter!');
-    settings.filters.push(quickFilter(args[0]));
+    settings.filters.push(quickFilter({name:args[0],alert:null}));
     saveSettings();
     await msg.reply('Added!');
+  },
+  setfilteralert: async (msg, args) => {
+    if(!args[0]) return await msg.reply('What filter tho');
+    let filter = settings.filters.find(q => q.name === args[0]);
+    if(!filter) return await msg.reply('There is no such filter');
+    if(args.length !== 1) filter.alert = args.slice(1).join(" ");
+    else filter.alert = null;
+    saveSettings();
+    await msg.reply('Set!');
   },
   remove: async (msg, args) => {
     if(!args[0]) return await msg.reply('What filter tho');
@@ -248,7 +265,7 @@ const commands = {
     const page = args[0] ? parseInt(args[0])-1 : 0;
     const list = settings.filters
       .slice(page*10,(page+1)*10)
-      .map(filter => ` - \`${filter.name}\``)
+      .map(filter => ` - \`${filter.name}\` (\`${filter.alert}\`)`)
       .join('\n')
     await msg.channel.send(`Queries (page ${page+1}/${Math.ceil(settings.filters.length/10)})\n${list}`)
   },
