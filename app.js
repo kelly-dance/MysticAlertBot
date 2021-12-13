@@ -133,7 +133,7 @@ const settings = (() => {
     filters: [{ name: 'tokens0+', alert: null }],
     alert: `use \`${process.env.BOT_PREFIX} setalert [alert]\` to change this text`,
   };
-  if (raw.filters.length !== 1 && typeof raw.filters[0] === "string") { // migrate data
+  if (typeof raw.filters[0] === "string") { // migrate data
     raw.filters = raw.filters.map(el => ({ name: el, alert: null }));
   }
   raw.filters = raw.filters.map(quickFilter);
